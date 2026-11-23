@@ -58,10 +58,11 @@ export function createStoneTextures() {
       const fbm = n1 * 0.45 + n2 * 0.28 + n3 * 0.17 + n4 * 0.10;
       const damp = Math.max(0, (fbm - 0.56) * 2.2);
 
-      const base = 22 + fbm * 22 - damp * 7;
-      dImg.data[idx] = base * 0.96;
-      dImg.data[idx + 1] = base * 0.98;
-      dImg.data[idx + 2] = base * 1.03;
+      // Neutrale lichte steen/grond-korrel (150..215) zodat donkere én zonnige dagkleuren natuurgetrouw kleuren
+      const base = 162 + fbm * 46 - damp * 22;
+      dImg.data[idx] = Math.min(255, base * 0.99);
+      dImg.data[idx + 1] = Math.min(255, base);
+      dImg.data[idx + 2] = Math.min(255, base * 1.01);
       dImg.data[idx + 3] = 255;
 
       // Subtiele vochtigheidsvariatie zonder harde glansvlekken

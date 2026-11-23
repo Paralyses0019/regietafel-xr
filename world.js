@@ -721,7 +721,7 @@ export class WorldManager {
     if (!this.isAR) {
       const dl = this.live.daylight;
       if (this.currentEnvId === 'hal') {
-        this.halFloorMat.color.set('#555b63').lerp(new THREE.Color('#e6dfd3'), dl);
+        this.halFloorMat.color.set('#1a1f26').lerp(new THREE.Color('#ddd4c4'), dl);
         for (const ring of this.halRings) ring.material.color.copy(this.live.accentColor);
       }
       if (this.currentEnvId === 'water') {
@@ -730,16 +730,16 @@ export class WorldManager {
         this.waterUniforms.uReflect.value.copy(this.live.skyMid).lerp(this.live.sunColor, 0.35);
         this.waterUniforms.uFogColor.value.copy(this.scene.fog.color);
         this.waterUniforms.uFogDensity.value = this.scene.fog.density;
-        this.waterHillMat.color.set('#0e141a').lerp(this.live.groundTint, 0.25 + dl * 0.65);
+        this.waterHillMat.color.set('#0e141a').lerp(this.live.groundTint, 0.25 + dl * 0.7);
       }
       if (this.currentEnvId === 'bos') {
-        this.bosFloorMat.color.set('#223026').lerp(this.live.groundTint, 0.35 + dl * 0.65);
-        this.bosCanopyMat.color.set('#14241b').lerp(new THREE.Color('#4f8f57'), dl * 0.9);
-        this.bosBlossomMat.color.set('#33252d').lerp(new THREE.Color('#f7b5c6'), dl * 0.95);
+        this.bosFloorMat.color.set('#141c17').lerp(this.live.groundTint, 0.25 + dl * 0.75);
+        this.bosCanopyMat.color.set('#14241b').lerp(new THREE.Color('#5a9c5f'), dl * 0.92);
+        this.bosBlossomMat.color.set('#33252d').lerp(new THREE.Color('#ffb8cb'), dl * 0.95);
       }
       if (this.currentEnvId === 'schuilplek') {
-        this.schuilGroundMat.color.set('#282e34').lerp(this.live.groundTint, 0.35 + dl * 0.65);
-        this.schuilHillMat.color.set('#11161c').lerp(this.live.groundTint, 0.25 + dl * 0.62);
+        this.schuilGroundMat.color.set('#181d22').lerp(this.live.groundTint, 0.25 + dl * 0.75);
+        this.schuilHillMat.color.set('#11161c').lerp(this.live.groundTint, 0.25 + dl * 0.68);
         this.tentMat.emissive.copy(this.live.accentColor);
         this.tentMat.emissiveIntensity = 0.08 + this.live.brightness * 0.16;
       }
