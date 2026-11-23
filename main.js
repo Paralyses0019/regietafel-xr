@@ -9,6 +9,7 @@ import { WorldManager } from './world.js';
 import { PropsManager } from './props.js';
 import { Panel3D } from './panel3d.js';
 import { XRInputManager } from './xr-input.js';
+import { createStudioEnvironment } from './materials.js';
 
 const $ = s => document.querySelector(s);
 const launcher = $('#launcher');
@@ -43,6 +44,8 @@ if (renderer.xr.setFoveation) renderer.xr.setFoveation(1);
 stage.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
+scene.environment = createStudioEnvironment(renderer);
+scene.environmentIntensity = 0.45;
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.05, 120);
 camera.position.set(0, 1.6, 0);
 scene.add(camera);
@@ -84,14 +87,14 @@ function updateHudButtons() {
   const playBtn = $('#btn-quick-play');
   if (state.mode === 'playing') {
     toggleBtn.hidden = true;
-    playBtn.textContent = '■ Stop ervaring';
+    playBtn.textContent = 'Stop ervaring';
   } else if (state.mode === 'ready' || state.mode === 'done') {
     toggleBtn.hidden = true;
-    playBtn.textContent = '✎ Terug naar bouwen';
+    playBtn.textContent = 'Terug naar bouwen';
   } else {
     toggleBtn.hidden = false;
-    toggleBtn.textContent = panel.hidden ? 'Paneel tonen' : 'Paneel verbergen';
-    playBtn.textContent = '▶ Doorgeven / Play';
+    toggleBtn.textContent = panel.hidden ? 'Toon paneel' : 'Verberg paneel';
+    playBtn.textContent = 'Doorgeven';
   }
 }
 

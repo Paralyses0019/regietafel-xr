@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Regietafel XR — IX1</title>
+  <title>Regietafel XR</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
     {
@@ -15,46 +15,47 @@
 </head>
 <body>
   <main id="launcher">
-    <div class="card">
-      <p class="eyebrow">IX1 &middot; WEBXR REGIETAFEL</p>
-      <h1>Bouw je eigen VR-ervaring.</h1>
+    <header class="top">
+      <p class="eyebrow">IX1 &middot; IMMERSIVE LAB</p>
+      <h1>Regietafel XR</h1>
       <p class="lead">
-        Kies licht, mist, deeltjes, 3D-geluid en objecten in maximaal vier momenten.
-        Klaar? Klik op <strong>Doorgeven</strong>, geef de bril aan je buur en laat die op <strong>Start</strong> klikken.
+        Bouw een korte sfeer-ervaring in vier momenten met licht, mist, 3D-geluid en objecten.
+        Klaar? Klik op <strong>Doorgeven</strong> en zet de bril bij je buur op.
       </p>
+    </header>
 
-      <div class="actions">
-        <button id="btn-vr" class="btn primary" disabled>
-          <span class="btn-title">Start in VR</span>
-          <span class="btn-sub" id="vr-status">Controleren of Quest VR klaarstaat…</span>
-        </button>
-        <button id="btn-mr" class="btn accent" disabled>
-          <span class="btn-title">Start in MR (eigen lokaal)</span>
-          <span class="btn-sub" id="mr-status">Passthrough over het echte lokaal</span>
-        </button>
-        <button id="btn-desktop" class="btn ghost">
-          <span class="btn-title">Open op dit scherm (laptop / beamer)</span>
-          <span class="btn-sub">Sleep om rond te kijken &middot; klik op het 3D-paneel en objecten</span>
-        </button>
-      </div>
+    <section class="launch-grid" aria-label="Kies modus">
+      <button id="btn-vr" class="tile primary" disabled>
+        <span class="num">01 / QUEST VR</span>
+        <strong>Start in VR</strong>
+        <span class="sub" id="vr-status">Controleren of Quest VR klaarstaat…</span>
+      </button>
 
-      <div class="steps">
-        <div><b>1 &middot; Sfeer</b><span>Kies ruimte, kleur, licht, mist en deeltjes.</span></div>
-        <div><b>2 &middot; Geluid</b><span>Mix 2 lagen en plaats 3D-geluid achter of naast je.</span></div>
-        <div><b>3 &middot; Bouwen</b><span>Plus: zet muren, lichtbollen, bomen of kampvuur neer.</span></div>
-        <div><b>4 &middot; Cues &amp; Play</b><span>Bouw tot 4 momenten en geef de bril door.</span></div>
-      </div>
+      <button id="btn-mr" class="tile" disabled>
+        <span class="num">02 / QUEST MIXED REALITY</span>
+        <strong>Start in het lokaal (MR)</strong>
+        <span class="sub" id="mr-status">Passthrough over het echte lokaal</span>
+      </button>
 
-      <p class="safety">Maak 1,5 &times; 1,5 meter vrij. Wordt het te veel? Zet de bril gewoon af. Je werk blijft op deze bril bewaard.</p>
-    </div>
+      <button id="btn-desktop" class="tile wide">
+        <span class="num">03 / LAPTOP &amp; BEAMER</span>
+        <strong>Open op dit scherm</strong>
+        <span class="sub">Sleep om rond te kijken &middot; klik op de regietafel en sleep objecten in 3D</span>
+      </button>
+    </section>
+
+    <footer class="foot">
+      <span>1,5 &times; 1,5 meter vrij. Wordt het te veel: zet de bril af.</span>
+      <span>Je ontwerp blijft lokaal op deze bril bewaard.</span>
+    </footer>
   </main>
 
   <div id="stage" hidden>
     <div id="hud">
       <button id="btn-exit" class="hud-btn">&larr; Menu</button>
-      <button id="btn-toggle-panel" class="hud-btn">Paneel verbergen</button>
-      <button id="btn-quick-play" class="hud-btn accent-hud">&#9654; Doorgeven / Play</button>
-      <span id="hud-hint">Sleep om rond te kijken &middot; klik op knoppen op het paneel &middot; sleep objecten in 3D &middot; Esc = stop Play</span>
+      <button id="btn-toggle-panel" class="hud-btn">Verberg paneel</button>
+      <button id="btn-quick-play" class="hud-btn sand">Doorgeven</button>
+      <span id="hud-hint">Sleep om te kijken &middot; klik knoppen &middot; sleep objecten &middot; Esc stopt Play</span>
     </div>
     <div id="toast" hidden></div>
   </div>

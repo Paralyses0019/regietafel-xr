@@ -10,9 +10,9 @@ function createHandGlow() {
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(0.075, 14, 10),
     new THREE.MeshBasicMaterial({
-      color: 0x6ae6d6,
+      color: 0xe7d8be,
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     })
@@ -65,9 +65,9 @@ export class XRInputManager {
         new THREE.Vector3(0, 0, -4.5)
       ]);
       const lineMat = new THREE.LineBasicMaterial({
-        color: 0x7be3d0,
+        color: 0xe7d8be,
         transparent: true,
-        opacity: 0.65
+        opacity: 0.52
       });
       const line = new THREE.Line(lineGeo, lineMat);
       controller.add(line);

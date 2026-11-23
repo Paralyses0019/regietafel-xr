@@ -1,15 +1,35 @@
-// Zwevend 3D-regiepaneel (high-DPI CanvasTexture + UV hit-testing) voor VR, MR en Desktop
+// Zwevende studio-regietafel v2 — architectonische lichtconsole in de stijl van zintuigen-vr
+// (mat-zwart glas, haarlijnen, warm zand #e7d8be voor actieve keuzes, verfijnde faders, geen neon-clichés)
 import * as THREE from 'three';
 import {
   ENVIRONMENTS, COLORS, PARTICLES, AMBIENCE_ITEMS, SOUND_TYPES,
-  PROP_TYPES, PROP_COLORS, PRESETS, MAX_PROPS, MAX_SOUNDS,
+  PROP_TYPES, PROP_COLORS, MAX_PROPS, MAX_SOUNDS,
   getActiveCue, getEnabledCues
 } from './state.js';
 
 const W = 1280;
-const H = 860;
+const H = 820;
 
-function roundRect(ctx, x, y, w, h, r) {
+const PAL = {
+  bg: 'rgba(12, 14, 16, 0.90)',
+  surface: 'rgba(255, 255, 255, 0.032)',
+  surfaceHover: 'rgba(255, 255, 255, 0.085)',
+  line: 'rgba(231, 216, 190, 0.16)',
+  lineFaint: 'rgba(255, 255, 255, 0.08)',
+  lineHover: 'rgba(231, 216, 190, 0.52)',
+  sand: '#e7d8be',
+  sandSoft: 'rgba(231, 216, 190, 0.14)',
+  sandInk: '#111110',
+  ink: '#f2eee6',
+  muted: '#9b9386',
+  dim: '#6e685e',
+  danger: 'rgba(218, 102, 92, 0.22)',
+  dangerLine: 'rgba(218, 102, 92, 0.55)'
+};
+
+const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+
+function drawRect(ctx, x, y, w, h, r = 3) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -35,29 +55,26 @@ export class Panel3D {
     this.root = new THREE.Group();
     this.scene.add(this.root);
 
-    // Hoofdpaneel (Build + Ready + Done)
     this.mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.16, 1.16 * (H / W)),
+      new THREE.PlaneGeometry(1.12, 1.12 * (H / W)),
       new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, side: THREE.DoubleSide })
     );
     this.mesh.userData = { isPanel: true };
     this.root.add(this.mesh);
 
-    // Mini "Toon paneel" / "Stop" knop onderaan als het paneel is ingeklapt of tijdens Play
+    // Minimalistische lage zweef-balk voor Play-stop of Toon paneel
     this.pillCanvas = document.createElement('canvas');
     this.pillCanvas.width = 420;
-    this.pillCanvas.height = 110;
+    this.pillCanvas.height = 96;
     this.pillCtx = this.pillCanvas.getContext('2d');
     this.pillTex = new THREE.CanvasTexture(this.pillCanvas);
     this.pillTex.colorSpace = THREE.SRGBColorSpace;
 
     this.pillMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.42, 0.11),
+      new THREE.PlaneGeometry(0.40, 0.092),
       new THREE.MeshBasicMaterial({ map: this.pillTex, transparent: true, side: THREE.DoubleSide })
     );
     this.pillMesh.userData = { isPill: true };
-    this.pillMesh.position.set(0, 0.42, -1.15);
-    this.pillMesh.rotation.x = -0.55;
     this.pillMesh.visible = false;
     this.scene.add(this.pillMesh);
 
@@ -84,15 +101,14 @@ export class Panel3D {
 
     this.root.position.set(
       originPos.x + dir.x * distance,
-      Math.max(1.05, originPos.y - 0.18),
+      Math.max(1.02, originPos.y - 0.16),
       originPos.z + dir.z * distance
     );
     this.root.lookAt(originPos.x, originPos.y - 0.06, originPos.z);
 
-    // Zet ook de mini-pill netjes laag voor de speler
     this.pillMesh.position.set(
       originPos.x + dir.x * 1.15,
-      Math.max(0.35, originPos.y - 0.95),
+      Math.max(0.34, originPos.y - 0.96),
       originPos.z + dir.z * 1.15
     );
     this.pillMesh.lookAt(originPos.x, originPos.y, originPos.z);
@@ -118,19 +134,19 @@ export class Panel3D {
 
   _drawPill(text, accent = false) {
     const ctx = this.pillCtx;
-    ctx.clearRect(0, 0, 420, 110);
-    roundRect(ctx, 8, 8, 404, 94, 47);
-    ctx.fillStyle = accent ? 'rgba(18, 28, 36, 0.88)' : 'rgba(14, 20, 28, 0.72)';
+    ctx.clearRect(0, 0, 420, 96);
+    drawRect(ctx, 4, 4, 412, 88, 3);
+    ctx.fillStyle = 'rgba(12, 14, 16, 0.86)';
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = accent ? '#2bb3a3' : 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = accent ? PAL.sand : 'rgba(231, 216, 190, 0.35)';
     ctx.stroke();
 
-    ctx.fillStyle = '#eef4fa';
-    ctx.font = '700 30px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    ctx.fillStyle = PAL.ink;
+    ctx.font = `400 24px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 210, 56);
+    ctx.fillText(text, 210, 49);
     this.pillTex.needsUpdate = true;
   }
 
@@ -142,15 +158,15 @@ export class Panel3D {
     if (state.mode === 'playing') {
       this.mesh.visible = false;
       this.pillMesh.visible = true;
-      const cueLabel = playInfo ? `Moment ${playInfo.step}/${playInfo.total} · Stop` : 'Stop ervaring';
-      this._drawPill(cueLabel, false);
+      const lbl = playInfo ? `MOMENT ${playInfo.step} / ${playInfo.total}   ·   STOP` : 'STOP';
+      this._drawPill(lbl, false);
       return;
     }
 
     if (state.mode === 'build' && this.hidden) {
       this.mesh.visible = false;
       this.pillMesh.visible = true;
-      this._drawPill('Toon regietafel', true);
+      this._drawPill('REGIETAFEL TONEN', true);
       return;
     }
 
@@ -167,13 +183,17 @@ export class Panel3D {
       return;
     }
 
-    // Build mode: groot regiepaneel
-    roundRect(ctx, 10, 10, W - 20, H - 20, 28);
-    ctx.fillStyle = 'rgba(12, 18, 25, 0.94)';
+    // Hoofdconsole: mat-zwart architectonisch kader
+    drawRect(ctx, 2, 2, W - 4, H - 4, 4);
+    ctx.fillStyle = PAL.bg;
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = PAL.line;
     ctx.stroke();
+
+    // Subtiele bovenste accentlijn
+    ctx.fillStyle = PAL.sand;
+    ctx.fillRect(2, 2, W - 4, 2);
 
     this._renderHeader(ctx, state);
 
@@ -191,56 +211,64 @@ export class Panel3D {
     this.texture.needsUpdate = true;
   }
 
-  _addButton(ctx, id, x, y, w, h, label, opts = {}) {
+  _sectionLabel(ctx, text, x, y) {
+    ctx.fillStyle = PAL.muted;
+    ctx.font = `500 14px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(text, x, y);
+  }
+
+  _btn(ctx, id, x, y, w, h, label, opts = {}) {
     const hovered = this.hoverId === id;
     const active = !!opts.active;
     const disabled = !!opts.disabled;
-    const radius = opts.radius ?? 14;
 
-    roundRect(ctx, x, y, w, h, radius);
-    if (opts.fill) {
-      ctx.fillStyle = opts.fill;
-    } else if (opts.primary) {
-      ctx.fillStyle = hovered ? '#37ccb9' : '#2bb3a3';
+    drawRect(ctx, x, y, w, h, opts.radius ?? 3);
+    if (opts.primary) {
+      ctx.fillStyle = hovered ? '#f4e7cf' : PAL.sand;
     } else if (opts.danger) {
-      ctx.fillStyle = hovered ? 'rgba(239,106,99,0.45)' : 'rgba(239,106,99,0.22)';
+      ctx.fillStyle = hovered ? 'rgba(218,102,92,0.36)' : PAL.danger;
     } else if (active) {
-      ctx.fillStyle = 'rgba(43, 179, 163, 0.28)';
+      ctx.fillStyle = PAL.sand;
     } else {
-      ctx.fillStyle = hovered ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.06)';
+      ctx.fillStyle = hovered ? PAL.surfaceHover : PAL.surface;
     }
     ctx.fill();
 
-    ctx.lineWidth = active || hovered ? 2.5 : 1.5;
-    ctx.strokeStyle = opts.primary
-      ? '#66e4d5'
-      : active
-        ? '#2bb3a3'
+    ctx.lineWidth = hovered || active ? 1.8 : 1.2;
+    ctx.strokeStyle = opts.primary || active
+      ? PAL.sand
+      : opts.danger
+        ? PAL.dangerLine
         : hovered
-          ? 'rgba(255,255,255,0.45)'
-          : 'rgba(255,255,255,0.12)';
+          ? PAL.lineHover
+          : PAL.line;
     ctx.stroke();
 
     if (opts.swatch) {
+      const cx = label ? x + 24 : x + w / 2;
       ctx.beginPath();
-      ctx.arc(x + (label ? 26 : w / 2), y + h / 2, label ? 12 : 16, 0, Math.PI * 2);
+      ctx.arc(cx, y + h / 2, label ? 9 : 13, 0, Math.PI * 2);
       ctx.fillStyle = opts.swatch;
       ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.stroke();
+      if (active) {
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = PAL.sandInk;
+        ctx.stroke();
+      }
     }
 
     if (label) {
       ctx.fillStyle = disabled
-        ? 'rgba(255,255,255,0.32)'
-        : opts.primary
-          ? '#041917'
-          : '#eef4fa';
-      ctx.font = `${opts.bold !== false ? '700' : '600'} ${opts.fontSize ?? 22}px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif`;
+        ? 'rgba(242,238,230,0.26)'
+        : (opts.primary || active)
+          ? PAL.sandInk
+          : PAL.ink;
+      ctx.font = `${(opts.primary || active) ? '500' : '400'} ${opts.fontSize ?? 19}px ${FONT}`;
       ctx.textAlign = opts.swatch ? 'left' : 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, opts.swatch ? x + 48 : x + w / 2, y + h / 2 + 1);
+      ctx.fillText(label, opts.swatch ? x + 44 : x + w / 2, y + h / 2 + 1);
     }
 
     if (!disabled && opts.onClick) {
@@ -248,48 +276,42 @@ export class Panel3D {
     }
   }
 
-  _addSlider(ctx, id, x, y, w, h, label, value, colorHex, onChange) {
+  // Verfijnde hardware-stijl fader (dunne rail + scherp schuifstreepje)
+  _fader(ctx, id, x, y, w, h, label, value, accentHex, onChange) {
     const hovered = this.hoverId === id || this.activeSlider?.id === id;
-    const clamped = Math.max(0, Math.min(1, value ?? 0));
+    const v = Math.max(0, Math.min(1, value ?? 0));
 
-    // Label + %
-    ctx.fillStyle = '#c8d4e0';
-    ctx.font = '600 20px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    ctx.fillStyle = PAL.ink;
+    ctx.font = `400 18px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(label, x, y);
 
-    ctx.fillStyle = '#eef4fa';
+    ctx.fillStyle = hovered ? PAL.sand : PAL.muted;
     ctx.textAlign = 'right';
-    ctx.fillText(`${Math.round(clamped * 100)}%`, x + w, y);
+    ctx.fillText(`${Math.round(v * 100)}`, x + w, y);
 
-    const trackY = y + 32;
-    const trackH = h - 32;
-    roundRect(ctx, x, trackY, w, trackH, trackH / 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fill();
-    ctx.lineWidth = hovered ? 2.5 : 1.5;
-    ctx.strokeStyle = hovered ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.14)';
-    ctx.stroke();
+    const railY = y + 40;
+    // Achtergrondrail
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(x, railY - 2, w, 4);
 
-    const fillW = Math.max(trackH, clamped * w);
-    roundRect(ctx, x, trackY, fillW, trackH, trackH / 2);
-    ctx.fillStyle = colorHex || '#2bb3a3';
-    ctx.fill();
+    // Gevulde rail
+    ctx.fillStyle = accentHex || PAL.sand;
+    ctx.fillRect(x, railY - 2, Math.max(2, v * w), 4);
 
-    // Knopje
-    const knobX = x + clamped * (w - trackH) + trackH / 2;
-    ctx.beginPath();
-    ctx.arc(knobX, trackY + trackH / 2, trackH * 0.44, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
+    // Fader-cap (strak verticaal blokje zoals een DMX-lichttafel)
+    const capX = x + v * w;
+    drawRect(ctx, capX - 7, railY - 14, 14, 28, 2);
+    ctx.fillStyle = hovered ? '#ffffff' : PAL.sand;
     ctx.fill();
 
     this.hitBoxes.push({
       id,
-      x: x - 8,
-      y: trackY - 10,
-      w: w + 16,
-      h: trackH + 20,
+      x: x - 10,
+      y: railY - 22,
+      w: w + 20,
+      h: 44,
       trackX: x,
       trackW: w,
       type: 'slider',
@@ -298,518 +320,452 @@ export class Panel3D {
   }
 
   _renderHeader(ctx, state) {
-    // Tabs
+    // 3 schone tab-headers met actieve onderstreping
     const tabs = [
-      { id: 'sfeer', label: '1 · Sfeer' },
-      { id: 'geluid', label: '2 · Geluid' },
-      { id: 'bouwen', label: '3 · Bouwen (Plus)' }
+      { id: 'sfeer', label: '01  Sfeer' },
+      { id: 'geluid', label: '02  Geluid' },
+      { id: 'bouwen', label: '03  Bouwen' }
     ];
-    let tx = 36;
+    let tx = 44;
     tabs.forEach(t => {
-      const tw = t.id === 'bouwen' ? 215 : 155;
-      this._addButton(ctx, `tab_${t.id}`, tx, 30, tw, 58, t.label, {
-        active: state.activeTab === t.id,
-        fontSize: 21,
+      const tw = 152;
+      const active = state.activeTab === t.id;
+      const hovered = this.hoverId === `tab_${t.id}`;
+      ctx.fillStyle = active ? PAL.ink : hovered ? '#d6cfc4' : PAL.muted;
+      ctx.font = `${active ? '500' : '400'} 21px ${FONT}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.label, tx, 50);
+
+      if (active) {
+        ctx.fillStyle = PAL.sand;
+        ctx.fillRect(tx, 79, 108, 2.5);
+      }
+      this.hitBoxes.push({
+        id: `tab_${t.id}`,
+        x: tx - 8,
+        y: 22,
+        w: tw,
+        h: 60,
+        type: 'button',
         onClick: () => this.cb.setTab(t.id)
       });
-      tx += tw + 12;
+      tx += tw + 16;
     });
 
-    // Presets
-    ctx.fillStyle = '#8fa0b2';
-    ctx.font = '600 15px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    // Presets (discreet en strak)
+    ctx.fillStyle = PAL.dim;
+    ctx.font = `500 13px ${FONT}`;
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('VOORBEELD:', 605, 18);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('START', 596, 50);
 
-    const presetKeys = ['schuilplek', 'spanning', 'lokaal'];
-    const presetLabels = ['Schuilplek', 'Spanning', 'MR'];
-    let px = 605;
-    presetKeys.forEach((pk, idx) => {
-      const pw = idx === 2 ? 64 : 112;
-      this._addButton(ctx, `preset_${pk}`, px, 40, pw, 48, presetLabels[idx], {
-        fontSize: 17,
-        onClick: () => this.cb.loadPreset(pk)
+    const presets = [
+      { key: 'schuilplek', label: 'Schuilplek', w: 112 },
+      { key: 'spanning', label: 'Spanning', w: 102 },
+      { key: 'lokaal', label: 'MR', w: 58 }
+    ];
+    let px = 654;
+    presets.forEach(p => {
+      this._btn(ctx, `preset_${p.key}`, px, 29, p.w, 42, p.label, {
+        fontSize: 16,
+        onClick: () => this.cb.loadPreset(p.key)
       });
-      px += pw + 8;
+      px += p.w + 8;
     });
 
     // Verberg + Doorgeven
-    this._addButton(ctx, 'btn_hide', 926, 30, 108, 58, 'Verberg', {
-      fontSize: 19,
+    this._btn(ctx, 'btn_hide', 964, 29, 98, 42, 'Verberg', {
+      fontSize: 16,
       onClick: () => this.cb.toggleHide()
     });
-    this._addButton(ctx, 'btn_ready', 1044, 30, 202, 58, '▶ Doorgeven', {
+    this._btn(ctx, 'btn_ready', 1072, 29, 166, 42, 'Doorgeven  →', {
       primary: true,
-      fontSize: 22,
+      fontSize: 17,
       onClick: () => this.cb.enterReady()
     });
 
-    // Scheidingslijn
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(32, 106);
-    ctx.lineTo(W - 32, 106);
-    ctx.stroke();
+    ctx.fillStyle = PAL.lineFaint;
+    ctx.fillRect(40, 82, W - 80, 1);
   }
 
   _renderTabSfeer(ctx, state, cue) {
-    // 1. Basisruimte
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(
-      this.isAR ? 'BASISRUIMTE (MR-PASSTHROUGH ACTIEF — JE ZIET HET ECHTE LOKAAL)' : 'BASISRUIMTE (VR)',
-      40, 126
+    this._sectionLabel(
+      ctx,
+      this.isAR ? 'RUIMTE   —   MIXED REALITY ACTIEF (EIGEN LOKAAL)' : 'BASISRUIMTE',
+      44, 110
     );
-
     ENVIRONMENTS.forEach((env, idx) => {
       const bw = 285;
-      const bx = 40 + idx * (bw + 16);
-      this._addButton(ctx, `env_${env.id}`, bx, 156, bw, 58, env.label, {
+      this._btn(ctx, `env_${env.id}`, 44 + idx * (bw + 16), 138, bw, 54, env.label, {
         active: !this.isAR && cue.env === env.id,
         disabled: this.isAR,
-        fontSize: 22,
+        fontSize: 19,
         onClick: () => this.cb.updateCue({ env: env.id })
       });
     });
 
-    // 2. Licht & Kleur
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.fillText('LICHT & SFEERKLEUR', 40, 236);
-
+    this._sectionLabel(ctx, 'LICHT & SFEERKLEUR', 44, 222);
     COLORS.forEach((col, idx) => {
       const bw = 188;
-      const bx = 40 + idx * (bw + 14);
-      this._addButton(ctx, `col_${col.id}`, bx, 266, bw, 58, col.label.split(' ')[0], {
+      this._btn(ctx, `col_${col.id}`, 44 + idx * (bw + 13), 250, bw, 52, col.label.split(' ')[0], {
         active: cue.color === col.id,
         swatch: col.hex,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.updateCue({ color: col.id })
       });
     });
 
-    // 3. Sliders (Helderheid, Mist, Puls)
-    const activeCol = COLORS.find(c => c.id === cue.color)?.hex || '#2bb3a3';
-    this._addSlider(ctx, 'sl_bright', 40, 352, 372, 68, 'Helderheid', cue.brightness, activeCol,
+    // Faders
+    const activeHex = COLORS.find(c => c.id === cue.color)?.hex || PAL.sand;
+    this._fader(ctx, 'sl_bright', 44, 340, 368, 64, 'Helderheid', cue.brightness, activeHex,
       v => this.cb.updateCue({ brightness: v }, true));
-    this._addSlider(ctx, 'sl_fog', 450, 352, 372, 68, this.isAR ? 'Mist (alleen in VR)' : 'Mistdichtheid', cue.fog, '#88b4d8',
+    this._fader(ctx, 'sl_fog', 456, 340, 368, 64, this.isAR ? 'Mist (alleen VR)' : 'Mist', cue.fog, PAL.sand,
       v => this.cb.updateCue({ fog: v }, true));
-    this._addSlider(ctx, 'sl_pulse', 860, 352, 380, 68, 'Ademing / Puls', cue.pulse, '#f2b66d',
+    this._fader(ctx, 'sl_pulse', 868, 340, 368, 64, 'Ademing / puls', cue.pulse, PAL.sand,
       v => this.cb.updateCue({ pulse: v }, true));
 
-    // 4. Deeltjes
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('DEELTJES IN DE LUCHT', 40, 452);
-
+    this._sectionLabel(ctx, 'DEELTJES & WEER', 44, 444);
     PARTICLES.forEach((p, idx) => {
       const bw = 188;
-      const bx = 40 + idx * (bw + 14);
-      this._addButton(ctx, `part_${p.id}`, bx, 482, bw, 62, p.label, {
+      this._btn(ctx, `part_${p.id}`, 44 + idx * (bw + 13), 472, bw, 54, p.label, {
         active: cue.particles === p.id,
-        fontSize: 21,
+        fontSize: 18,
         onClick: () => this.cb.updateCue({ particles: p.id })
       });
     });
 
-    // Tip-balk
-    roundRect(ctx, 40, 574, W - 80, 62, 14);
-    ctx.fillStyle = 'rgba(43,179,163,0.1)';
-    ctx.fill();
-    ctx.fillStyle = '#bfe8e2';
-    ctx.font = '600 20px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    // Rustige onderregel
+    ctx.fillStyle = PAL.dim;
+    ctx.font = `400 16px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Tip: test het verschil tussen Direct en Fade 4s onderaan — dat is het verschil tussen schrikken en Comfort.', 62, 606);
+    ctx.fillText('Tip: knijp op de grip-knop of tik op ◎ om het paneel weer recht voor je te plaatsen.', 44, 578);
   }
 
   _renderTabGeluid(ctx, state, cue) {
-    // Linkerkolom: 6 Sfeerlagen
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('SFEERLAGEN (MIX ER 1 OF 2)', 40, 126);
-
-    this._addButton(ctx, 'btn_silence', 462, 118, 150, 42, 'Alles stil', {
-      fontSize: 18,
+    this._sectionLabel(ctx, 'SFEERLAGEN (1 OF 2 MIXEN)', 44, 110);
+    this._btn(ctx, 'btn_silence', 494, 102, 114, 34, 'Alles stil', {
+      fontSize: 15,
       onClick: () => this.cb.clearAmbience()
     });
 
     AMBIENCE_ITEMS.forEach((item, idx) => {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
-      const sx = 40 + col * 294;
-      const sy = 176 + row * 112;
-      this._addSlider(
+      const sx = 44 + col * 292;
+      const sy = 160 + row * 124;
+      this._fader(
         ctx,
         `amb_${item.id}`,
-        sx, sy, 274, 72,
+        sx, sy, 266, 64,
         item.label,
         cue.ambience?.[item.id] ?? 0,
-        idx >= 4 ? '#ef6a63' : '#2bb3a3',
+        idx >= 4 ? '#d98a7c' : PAL.sand,
         v => this.cb.updateAmbience(item.id, v)
       );
     });
 
-    // Scheidingslijn midden
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(646, 124);
-    ctx.lineTo(646, 650);
-    ctx.stroke();
+    ctx.fillStyle = PAL.lineFaint;
+    ctx.fillRect(640, 110, 1, 500);
 
-    // Rechterkolom: 3D-geluidsbronnen plaatsen
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
     const sndCount = (cue.sounds || []).length;
-    ctx.fillText(`3D-GELUID IN DE RUIMTE (${sndCount}/${MAX_SOUNDS})`, 676, 126);
+    this._sectionLabel(ctx, `3D-GELUID IN DE RUIMTE  (${sndCount}/${MAX_SOUNDS})`, 674, 110);
 
     SOUND_TYPES.forEach((st, idx) => {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
-      const bx = 676 + col * 288;
-      const by = 160 + row * 72;
-      this._addButton(ctx, `add_snd_${st.id}`, bx, by, 274, 58, `+ ${st.label}`, {
+      this._btn(ctx, `add_snd_${st.id}`, 674 + col * 288, 140 + row * 64, 274, 52, `+  ${st.label}`, {
         swatch: st.color,
         disabled: sndCount >= MAX_SOUNDS,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.spawnSound(st.id)
       });
     });
 
-    // Inspector voor geselecteerde 3D-geluidsbron
     const selected = (cue.sounds || []).find(s => s.id === state.selectedObjectId)
       || (cue.sounds && cue.sounds[cue.sounds.length - 1]);
 
-    roundRect(ctx, 676, 326, 562, 314, 18);
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    drawRect(ctx, 674, 290, 562, 316, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.024)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = PAL.lineFaint;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
     if (selected) {
       const meta = SOUND_TYPES.find(s => s.id === selected.type) || SOUND_TYPES[0];
-      ctx.fillStyle = '#eef4fa';
-      ctx.font = '700 22px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+      ctx.fillStyle = PAL.ink;
+      ctx.font = `400 22px ${FONT}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText(`Geselecteerd: ${meta.label}`, 700, 346);
+      ctx.fillText(meta.label, 700, 314);
 
-      ctx.fillStyle = '#9db0c4';
-      ctx.font = '600 17px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('Zet snel op een richting (of sleep de bol in 3D):', 700, 382);
-
+      this._sectionLabel(ctx, 'RICHTING (OF SLEEP DE RING IN 3D)', 700, 352);
       const dirs = [
-        { id: 'voor', label: 'Voor', x: 0, z: -2.4 },
-        { id: 'links', label: 'Links', x: -2.4, z: 0 },
-        { id: 'rechts', label: 'Rechts', x: 2.4, z: 0 },
-        { id: 'achter', label: 'Achter je!', x: 0, z: 2.4 }
+        { id: 'voor', label: 'Voor', x: 0, z: -2.5 },
+        { id: 'links', label: 'Links', x: -2.5, z: 0 },
+        { id: 'rechts', label: 'Rechts', x: 2.5, z: 0 },
+        { id: 'achter', label: 'Achter je', x: 0, z: 2.5 }
       ];
       dirs.forEach((d, idx) => {
-        this._addButton(ctx, `snd_dir_${d.id}`, 700 + idx * 130, 416, 120, 56, d.label, {
-          fontSize: 19,
+        this._btn(ctx, `snd_dir_${d.id}`, 700 + idx * 130, 378, 120, 48, d.label, {
+          fontSize: 17,
           onClick: () => this.cb.moveSoundRelative(selected.id, d.x, d.z)
         });
       });
 
-      this._addSlider(ctx, 'sl_snd_vol', 700, 492, 514, 62, 'Volume van deze bron', selected.volume ?? 0.8, meta.color,
+      this._fader(ctx, 'sl_snd_vol', 700, 452, 510, 58, 'Volume', selected.volume ?? 0.8, meta.color,
         v => this.cb.updateSound(selected.id, { volume: v }));
 
-      this._addButton(ctx, 'snd_test', 700, 570, 246, 52, '▶ Test geluid nu', {
+      this._btn(ctx, 'snd_test', 700, 536, 246, 48, 'Test geluid', {
         primary: true,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.testSound(selected.id)
       });
-      this._addButton(ctx, 'snd_del', 964, 570, 250, 52, '✕ Verwijder bron', {
+      this._btn(ctx, 'snd_del', 962, 536, 248, 48, 'Verwijder', {
         danger: true,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.deleteSelected(selected.id, 'sound')
       });
     } else {
-      ctx.fillStyle = '#9db0c4';
-      ctx.font = '600 21px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+      ctx.fillStyle = PAL.muted;
+      ctx.font = `400 19px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Klik hierboven op een 3D-geluid om het te plaatsen.', 957, 456);
-      ctx.font = '500 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillStyle = '#7e90a4';
-      ctx.fillText('In Play-modus is de bol onzichtbaar — je hoort alleen de richting.', 957, 494);
+      ctx.fillText('Kies hierboven een 3D-geluid om het te plaatsen.', 955, 434);
+      ctx.fillStyle = PAL.dim;
+      ctx.font = `400 16px ${FONT}`;
+      ctx.fillText('Tijdens Play is de ring onzichtbaar — je hoort alleen de richting.', 955, 470);
     }
   }
 
   _renderTabBouwen(ctx, state, cue) {
     const count = (cue.props || []).length;
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(`KIJK ERGENS HEEN EN PLAATS EEN ELEMENT (${count}/${MAX_PROPS})`, 40, 126);
+    this._sectionLabel(ctx, `PLAATS ELEMENT WAAR JE KIJKT  (${count}/${MAX_PROPS})`, 44, 110);
 
     if (count > 0) {
-      this._addButton(ctx, 'btn_clear_props', W - 210, 118, 170, 42, 'Wis alle objecten', {
+      this._btn(ctx, 'btn_clear_props', W - 184, 102, 140, 34, 'Alles wissen', {
         danger: true,
-        fontSize: 17,
+        fontSize: 15,
         onClick: () => this.cb.clearProps()
       });
     }
 
     PROP_TYPES.forEach((pt, idx) => {
       const bw = 188;
-      const bx = 40 + idx * (bw + 14);
-      this._addButton(ctx, `add_prop_${pt.id}`, bx, 168, bw, 66, `+ ${pt.label}`, {
+      this._btn(ctx, `add_prop_${pt.id}`, 44 + idx * (bw + 13), 146, bw, 56, `+  ${pt.label}`, {
         disabled: count >= MAX_PROPS,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.spawnProp(pt.id)
       });
     });
 
-    // Inspector box voor geselecteerd 3D-object
     const selected = (cue.props || []).find(p => p.id === state.selectedObjectId)
       || (cue.props && cue.props[cue.props.length - 1]);
 
-    roundRect(ctx, 40, 260, W - 80, 380, 20);
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    drawRect(ctx, 44, 232, W - 88, 374, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.024)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = PAL.lineFaint;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
     if (selected) {
       const meta = PROP_TYPES.find(p => p.id === selected.type) || PROP_TYPES[0];
-      ctx.fillStyle = '#eef4fa';
-      ctx.font = '700 24px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+      ctx.fillStyle = PAL.ink;
+      ctx.font = `400 24px ${FONT}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText(`Geselecteerd object: ${meta.label}`, 68, 286);
+      ctx.fillText(meta.label, 74, 260);
 
-      ctx.fillStyle = '#8fa0b2';
-      ctx.font = '600 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('Tip: wijs naar een object in 3D en sleep om het vrij te verplaatsen.', 480, 290);
+      ctx.fillStyle = PAL.dim;
+      ctx.font = `400 16px ${FONT}`;
+      ctx.fillText('Wijs in 3D op een object en sleep om het te verplaatsen.', 310, 266);
 
-      // Grootte (S / M / L)
-      ctx.fillStyle = '#9db0c4';
-      ctx.font = '700 17px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('GROOTTE', 68, 342);
-      const sizes = [{ l: 'Klein (S)', v: 0.7 }, { l: 'Normaal (M)', v: 1.0 }, { l: 'Groot (L)', v: 1.45 }];
+      this._sectionLabel(ctx, 'SCHAAL', 74, 316);
+      const sizes = [{ l: 'Klein', v: 0.7 }, { l: 'Normaal', v: 1.0 }, { l: 'Groot', v: 1.45 }];
       sizes.forEach((sz, idx) => {
-        this._addButton(ctx, `sz_${idx}`, 68 + idx * 144, 372, 134, 58, sz.l, {
+        this._btn(ctx, `sz_${idx}`, 74 + idx * 136, 344, 126, 52, sz.l, {
           active: Math.abs((selected.scale || 1) - sz.v) < 0.15,
-          fontSize: 19,
+          fontSize: 18,
           onClick: () => this.cb.updateProp(selected.id, { scale: sz.v })
         });
       });
 
-      // Afstand & draaien
-      ctx.fillStyle = '#9db0c4';
-      ctx.fillText('POSITIE & DRAAIEN', 534, 342);
-      this._addButton(ctx, 'prop_near', 534, 372, 155, 58, 'Dichterbij', {
-        fontSize: 19,
+      this._sectionLabel(ctx, 'AFSTAND & DRAAIEN', 518, 316);
+      this._btn(ctx, 'prop_near', 518, 344, 148, 52, 'Dichterbij', {
+        fontSize: 18,
         onClick: () => this.cb.nudgePropDistance(selected.id, -0.55)
       });
-      this._addButton(ctx, 'prop_far', 702, 372, 155, 58, 'Verder weg', {
-        fontSize: 19,
+      this._btn(ctx, 'prop_far', 678, 344, 148, 52, 'Verder weg', {
+        fontSize: 18,
         onClick: () => this.cb.nudgePropDistance(selected.id, 0.55)
       });
-      this._addButton(ctx, 'prop_rotL', 874, 372, 82, 58, '↺', {
-        fontSize: 26,
+      this._btn(ctx, 'prop_rotL', 846, 344, 72, 52, '↺', {
+        fontSize: 22,
         onClick: () => this.cb.updateProp(selected.id, { rotY: (selected.rotY || 0) - 0.5 })
       });
-      this._addButton(ctx, 'prop_rotR', 968, 372, 82, 58, '↻', {
-        fontSize: 26,
+      this._btn(ctx, 'prop_rotR', 928, 344, 72, 52, '↻', {
+        fontSize: 22,
         onClick: () => this.cb.updateProp(selected.id, { rotY: (selected.rotY || 0) + 0.5 })
       });
-      this._addButton(ctx, 'prop_del', 1068, 372, 144, 58, '✕ Weg', {
+      this._btn(ctx, 'prop_del', 1020, 344, 186, 52, 'Verwijder', {
         danger: true,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.deleteSelected(selected.id, 'prop')
       });
 
-      // Kleur / gloed
-      ctx.fillStyle = '#9db0c4';
-      ctx.font = '700 17px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('KLEUR / GLOED VAN DIT OBJECT', 68, 462);
+      this._sectionLabel(ctx, 'LICHTKLEUR / TINT', 74, 434);
       PROP_COLORS.forEach((hex, idx) => {
-        this._addButton(ctx, `pcol_${idx}`, 68 + idx * 110, 492, 96, 62, '', {
+        this._btn(ctx, `pcol_${idx}`, 74 + idx * 96, 462, 84, 54, '', {
           swatch: hex,
           active: selected.color === hex,
           onClick: () => this.cb.updateProp(selected.id, { color: hex })
         });
       });
 
-      // Volgende object kiezen (handig als je meerdere hebt)
       if (cue.props.length > 1) {
-        this._addButton(ctx, 'prop_next', 840, 492, 372, 62, `Volgend object (${cue.props.indexOf(selected) + 1}/${cue.props.length}) →`, {
-          fontSize: 19,
+        this._btn(ctx, 'prop_next', 846, 462, 360, 54, `Volgend object  (${cue.props.indexOf(selected) + 1}/${cue.props.length})  →`, {
+          fontSize: 17,
           onClick: () => this.cb.cycleSelectedProp()
         });
       }
     } else {
-      ctx.fillStyle = '#eef4fa';
-      ctx.font = '700 24px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+      ctx.fillStyle = PAL.muted;
+      ctx.font = `400 22px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Nog geen eigen objecten in dit moment.', W / 2, 420);
-      ctx.fillStyle = '#8fa0b2';
-      ctx.font = '500 20px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('Kijk ergens heen en klik hierboven op een element (bijv. + Kampvuur of + Zuil).', W / 2, 464);
+      ctx.fillText('Nog geen eigen elementen in dit moment.', W / 2, 404);
+      ctx.fillStyle = PAL.dim;
+      ctx.font = `400 17px ${FONT}`;
+      ctx.fillText('Kijk ergens heen en klik hierboven op bijvoorbeeld + Kampvuur of + Lichtpoort.', W / 2, 444);
     }
   }
 
   _renderCueBar(ctx, state, cue) {
-    // Scheidingslijn
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(32, 668);
-    ctx.lineTo(W - 32, 668);
-    ctx.stroke();
+    ctx.fillStyle = PAL.lineFaint;
+    ctx.fillRect(40, 636, W - 80, 1);
 
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 16px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('TIJDLIJN (MAX. 4 MOMENTEN)', 40, 682);
-
-    // 4 Cue knoppen
+    this._sectionLabel(ctx, 'MOMENTEN (TIJDLIJN)', 44, 654);
     for (let i = 0; i < 4; i++) {
       const c = state.cues[i];
-      const bx = 40 + i * 160;
-      const label = c.enabled ? `Cue ${i + 1}` : `+ Cue ${i + 1}`;
-      this._addButton(ctx, `cue_${i}`, bx, 712, 146, 68, label, {
+      const bx = 44 + i * 154;
+      const label = c.enabled ? `0${i + 1}` : `+ 0${i + 1}`;
+      this._btn(ctx, `cue_${i}`, bx, 682, 140, 60, label, {
         active: state.activeCueIndex === i,
-        fontSize: 22,
+        fontSize: 21,
         onClick: () => this.cb.selectCue(i)
       });
-      // Uitschakel-kruisje op Cue 2..4 als actief
       if (i > 0 && c.enabled && state.activeCueIndex === i) {
-        this._addButton(ctx, `cue_off_${i}`, bx + 106, 718, 34, 34, '×', {
+        this._btn(ctx, `cue_off_${i}`, bx + 104, 688, 28, 28, '×', {
           danger: true,
-          radius: 10,
-          fontSize: 20,
+          radius: 2,
+          fontSize: 18,
           onClick: () => this.cb.disableCue(i)
         });
       }
     }
 
-    // Duur van actieve cue
-    ctx.fillStyle = '#9db0c4';
-    ctx.font = '700 16px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-    ctx.fillText('DUUR', 696, 682);
+    this._sectionLabel(ctx, 'DUUR', 694, 654);
     [10, 18, 30].forEach((sec, idx) => {
-      this._addButton(ctx, `dur_${sec}`, 696 + idx * 78, 712, 70, 68, `${sec}s`, {
+      this._btn(ctx, `dur_${sec}`, 694 + idx * 74, 682, 66, 60, `${sec}s`, {
         active: cue.duration === sec,
-        fontSize: 20,
+        fontSize: 18,
         onClick: () => this.cb.updateCue({ duration: sec })
       });
     });
 
-    // Overgang (Direct vs Fade 4s)
-    ctx.fillStyle = '#9db0c4';
-    ctx.fillText('OVERGANG', 944, 682);
-    this._addButton(ctx, 'tr_direct', 944, 712, 92, 68, 'Direct', {
+    this._sectionLabel(ctx, 'OVERGANG', 936, 654);
+    this._btn(ctx, 'tr_direct', 936, 682, 92, 60, 'Direct', {
       active: cue.transition <= 0.6,
-      fontSize: 18,
+      fontSize: 17,
       onClick: () => this.cb.updateCue({ transition: 0.4 })
     });
-    this._addButton(ctx, 'tr_fade', 1044, 712, 102, 68, 'Fade 4s', {
+    this._btn(ctx, 'tr_fade', 1036, 682, 102, 60, 'Fade 4s', {
       active: cue.transition > 0.6,
-      fontSize: 18,
+      fontSize: 17,
       onClick: () => this.cb.updateCue({ transition: 4.0 })
     });
 
-    // Paneel voor je neus centreren
-    this._addButton(ctx, 'btn_recenter', 1156, 712, 88, 68, '◎', {
-      fontSize: 30,
+    this._btn(ctx, 'btn_recenter', 1152, 682, 84, 60, '◎', {
+      fontSize: 26,
       onClick: () => this.cb.recenterPanel()
     });
 
-    // Statusregel helemaal onderaan
     const enabled = getEnabledCues(state);
     const totalSec = enabled.reduce((s, item) => s + item.cue.duration, 0);
-    ctx.fillStyle = '#7e90a4';
-    ctx.font = '600 16px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    ctx.fillStyle = PAL.dim;
+    ctx.font = `400 15px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`Actief: ${enabled.length} moment${enabled.length === 1 ? '' : 'en'} · totale speelduur ~${totalSec} sec · automatisch opgeslagen`, 40, 814);
+    ctx.fillText(`${enabled.length} actief  ·  totaal ${totalSec} sec  ·  automatisch bewaard`, 44, 778);
   }
 
   _renderPlayCard(ctx, state) {
     const cx = W / 2;
-    const cw = 820;
-    const ch = 460;
+    const cw = 760;
+    const ch = 410;
     const x = cx - cw / 2;
     const y = H / 2 - ch / 2;
 
-    roundRect(ctx, x, y, cw, ch, 34);
-    ctx.fillStyle = 'rgba(11, 17, 24, 0.94)';
+    drawRect(ctx, x, y, cw, ch, 4);
+    ctx.fillStyle = 'rgba(12, 14, 16, 0.90)';
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(43, 179, 163, 0.55)';
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = PAL.line;
     ctx.stroke();
+
+    ctx.fillStyle = PAL.sand;
+    ctx.fillRect(x, y, cw, 2);
 
     const enabled = getEnabledCues(state);
     const totalSec = enabled.reduce((s, item) => s + item.cue.duration, 0);
-
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     if (state.mode === 'ready') {
-      ctx.fillStyle = '#2bb3a3';
-      ctx.font = '700 22px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+      ctx.fillStyle = PAL.muted;
+      ctx.font = `500 15px ${FONT}`;
       ctx.fillText('KLAAR OM TE ERVAREN', cx, y + 66);
 
-      ctx.fillStyle = '#eef4fa';
-      ctx.font = '800 44px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('Ga rustig staan en kijk om je heen.', cx, y + 132);
+      ctx.fillStyle = PAL.ink;
+      ctx.font = `400 44px ${FONT}`;
+      ctx.fillText('Ga rustig staan en kijk rond.', cx, y + 130);
 
-      ctx.fillStyle = '#99a9ba';
-      ctx.font = '600 24px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText(`${enabled.length} moment${enabled.length === 1 ? '' : 'en'} · ongeveer ${totalSec} seconden · til je handen eens op`, cx, y + 188);
+      ctx.fillStyle = PAL.muted;
+      ctx.font = `400 20px ${FONT}`;
+      ctx.fillText(`${enabled.length} moment${enabled.length === 1 ? '' : 'en'}  ·  ${totalSec} seconden`, cx, y + 184);
 
-      this._addButton(ctx, 'play_start', cx - 230, y + 240, 460, 96, '▶  START ERVARING', {
+      this._btn(ctx, 'play_start', cx - 190, y + 236, 380, 74, 'Start ervaring', {
         primary: true,
-        radius: 24,
-        fontSize: 32,
+        fontSize: 25,
         onClick: () => this.cb.startPlayback()
       });
-
-      this._addButton(ctx, 'play_back', cx - 150, y + 362, 300, 56, '✎  Terug naar bouwen', {
-        fontSize: 21,
+      this._btn(ctx, 'play_back', cx - 120, y + 332, 240, 44, 'Terug naar bouwen', {
+        fontSize: 17,
         onClick: () => this.cb.backToBuild()
       });
     } else {
-      ctx.fillStyle = '#f2b66d';
-      ctx.font = '700 22px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('EINDE VAN DE ERVARING', cx, y + 72);
+      ctx.fillStyle = PAL.muted;
+      ctx.font = `500 15px ${FONT}`;
+      ctx.fillText('EINDE', cx, y + 68);
 
-      ctx.fillStyle = '#eef4fa';
-      ctx.font = '800 42px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('Hoe voelde dit voor jouw persona?', cx, y + 140);
+      ctx.fillStyle = PAL.ink;
+      ctx.font = `400 40px ${FONT}`;
+      ctx.fillText('Wat voelde goed, en wat niet?', cx, y + 132);
 
-      ctx.fillStyle = '#99a9ba';
-      ctx.font = '600 22px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
-      ctx.fillText('Bespreek twee dingen: wat werkte goed, en wat kan rustiger of sterker?', cx, y + 196);
+      ctx.fillStyle = PAL.muted;
+      ctx.font = `400 19px ${FONT}`;
+      ctx.fillText('Bespreek één ding dat werkte en één ding dat rustiger kan.', cx, y + 186);
 
-      this._addButton(ctx, 'done_replay', cx - 280, y + 266, 260, 86, '↻  Nog een keer', {
+      this._btn(ctx, 'done_replay', cx - 250, y + 250, 236, 68, 'Nog een keer', {
         primary: true,
-        radius: 20,
-        fontSize: 26,
+        fontSize: 22,
         onClick: () => this.cb.startPlayback()
       });
-      this._addButton(ctx, 'done_edit', cx + 20, y + 266, 260, 86, '✎  Aanpassen', {
-        radius: 20,
-        fontSize: 26,
+      this._btn(ctx, 'done_edit', cx + 14, y + 250, 236, 68, 'Aanpassen', {
+        fontSize: 22,
         onClick: () => this.cb.backToBuild()
       });
     }
@@ -820,11 +776,11 @@ export class Panel3D {
     const cx = this.hoverUV.x * W;
     const cy = (1 - this.hoverUV.y) * H;
     ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#2bb3a3';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = PAL.sand;
     ctx.stroke();
   }
 
@@ -832,7 +788,6 @@ export class Panel3D {
     if (!uv) return null;
     const px = uv.x * W;
     const py = (1 - uv.y) * H;
-    // Zoek van achter naar voren zodat bovenliggende knoppen (zoals × op Cue) voorrang krijgen
     for (let i = this.hitBoxes.length - 1; i >= 0; i--) {
       const b = this.hitBoxes[i];
       if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) {
