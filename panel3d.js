@@ -353,25 +353,26 @@ export class Panel3D {
       tx += tw + 16;
     });
 
-    // Presets (discreet en strak)
+    // Presets (van vrolijke zomer tot donkere spanning + MR)
     ctx.fillStyle = PAL.dim;
     ctx.font = `500 13px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('START', 596, 50);
+    ctx.fillText('START', 536, 50);
 
     const presets = [
-      { key: 'schuilplek', label: 'Schuilplek', w: 112 },
-      { key: 'spanning', label: 'Spanning', w: 102 },
-      { key: 'lokaal', label: 'MR', w: 58 }
+      { key: 'zomer', label: 'Zomer', w: 82 },
+      { key: 'schuilplek', label: 'Schuilplek', w: 102 },
+      { key: 'spanning', label: 'Spanning', w: 94 },
+      { key: 'lokaal', label: 'MR', w: 50 }
     ];
-    let px = 654;
+    let px = 592;
     presets.forEach(p => {
       this._btn(ctx, `preset_${p.key}`, px, 29, p.w, 42, p.label, {
-        fontSize: 16,
+        fontSize: 15,
         onClick: () => this.cb.loadPreset(p.key)
       });
-      px += p.w + 8;
+      px += p.w + 7;
     });
 
     // Verberg + Doorgeven
@@ -461,7 +462,7 @@ export class Panel3D {
         sx, sy, 266, 64,
         item.label,
         cue.ambience?.[item.id] ?? 0,
-        idx >= 4 ? '#d98a7c' : PAL.sand,
+        idx === 5 ? '#d98a7c' : idx < 2 ? '#ffd166' : PAL.sand,
         v => this.cb.updateAmbience(item.id, v)
       );
     });

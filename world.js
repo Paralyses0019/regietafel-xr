@@ -43,14 +43,17 @@ export class WorldManager {
     this.linenTex = createLinenTexture();
 
     this.live = {
-      skyTop: new THREE.Color('#0c0b10'),
-      skyMid: new THREE.Color('#3b2316'),
-      fogColor: new THREE.Color('#1d1411'),
-      lightColor: new THREE.Color('#ffcf96'),
-      accentColor: new THREE.Color('#e7b97c'),
-      brightness: 0.6,
-      fog: 0.28,
-      pulse: 0.25
+      skyTop: new THREE.Color('#2c7cc4'),
+      skyMid: new THREE.Color('#a9e2fb'),
+      fogColor: new THREE.Color('#c6e8f7'),
+      lightColor: new THREE.Color('#fff5d6'),
+      accentColor: new THREE.Color('#ffd166'),
+      groundTint: new THREE.Color('#7a9e66'),
+      sunColor: new THREE.Color('#fff3c4'),
+      daylight: 1.0,
+      brightness: 0.85,
+      fog: 0.14,
+      pulse: 0.2
     };
     this.target = {
       skyTop: this.live.skyTop.clone(),
@@ -58,9 +61,12 @@ export class WorldManager {
       fogColor: this.live.fogColor.clone(),
       lightColor: this.live.lightColor.clone(),
       accentColor: this.live.accentColor.clone(),
-      brightness: 0.6,
-      fog: 0.28,
-      pulse: 0.25
+      groundTint: this.live.groundTint.clone(),
+      sunColor: this.live.sunColor.clone(),
+      daylight: 1.0,
+      brightness: 0.85,
+      fog: 0.14,
+      pulse: 0.2
     };
     this.fadeSpeed = 6.0;
 
@@ -89,10 +95,12 @@ export class WorldManager {
     this.scene.add(this.skyGroup);
 
     this.skyUniforms = {
-      uTop: { value: new THREE.Color('#0b0c12') },
-      uMid: { value: new THREE.Color('#3a2318') },
+      uTop: { value: new THREE.Color('#2c7cc4') },
+      uMid: { value: new THREE.Color('#a9e2fb') },
+      uSunColor: { value: new THREE.Color('#fff3c4') },
+      uDaylight: { value: 1.0 },
       uTime: { value: 0 },
-      uBrightness: { value: 0.6 }
+      uBrightness: { value: 0.85 }
     };
 
     const skyMat = new THREE.ShaderMaterial({
@@ -109,20 +117,29 @@ export class WorldManager {
       fragmentShader: displayOutput(`
         uniform vec3 uTop;
         uniform vec3 uMid;
+        uniform vec3 uSunColor;
+        uniform float uDaylight;
         uniform float uTime;
         uniform float uBrightness;
         varying vec3 vDir;
         ${NOISE_GLSL}
         void main() {
           vec3 d = normalize(vDir);
-          float h = smoothstep(-0.1, 0.72, d.y);
-          vec2 uv = d.xz / (abs(d.y) + 0.42);
-          float cloud = fbm(uv * 1.4 + vec2(uTime * 0.008, -uTime * 0.005));
+          float h = smoothstep(-0.08, 0.72, d.y);
+          vec2 uv = d.xz / (abs(d.y) + 0.45);
+          float cloud = fbm(uv * 1.35 + vec2(uTime * 0.009, -uTime * 0.005));
           vec3 col = mix(uMid, uTop, h);
-          col *= (0.78 + 0.34 * cloud);
-          float horizonBand = exp(-abs(d.y + 0.02) * 8.0) * 0.42;
-          col += uMid * horizonBand * (0.7 + 0.5 * cloud);
-          col *= (0.24 + uBrightness * 1.15);
+          // Zachte witte zomerwolken bij daglicht, donkere nevel bij nacht
+          float cloudMask = smoothstep(0.45, 0.82, cloud) * smoothstep(0.02, 0.35, d.y);
+          col = mix(col * (0.86 + 0.22 * cloud), mix(col, vec3(1.0, 0.98, 0.94), 0.55 * cloudMask), uDaylight);
+          float horizonBand = exp(-abs(d.y + 0.01) * 7.5) * 0.32;
+          col += uMid * horizonBand;
+          // Zachte stralende zon hoog aan de hemel in lichte/vrolijke sferen
+          vec3 sunDir = normalize(vec3(0.32, 0.38, -0.86));
+          float sunDot = max(0.0, dot(d, sunDir));
+          float sunGlow = pow(sunDot, 10.0) * 0.45 + pow(sunDot, 160.0) * 1.1;
+          col += uSunColor * sunGlow * (0.18 + 0.82 * uDaylight);
+          col *= (0.28 + uBrightness * 0.98);
           gl_FragColor = vec4(col, 1.0);
         }
       `)
@@ -177,19 +194,18 @@ export class WorldManager {
     this.scene.add(this.envRoot);
     this.envs = {};
 
-    // 1. Donkere galerie / betonnen hal (natte reflecterende steenvloer + slanke zuilen)
+    // 1. Galerie / Hal (natte leisteen bij nacht, zonnige zandsteen bij dag)
     const hal = new THREE.Group();
-    const halFloor = new THREE.Mesh(
-      new THREE.CircleGeometry(38, 64),
-      new THREE.MeshStandardMaterial({
-        map: this.stoneTex.map,
-        roughnessMap: this.stoneTex.roughnessMap,
-        bumpMap: this.stoneTex.bumpMap,
-        bumpScale: 0.025,
-        roughness: 0.9,
-        metalness: 0.14
-      })
-    );
+    this.halFloorMat = new THREE.MeshStandardMaterial({
+      map: this.stoneTex.map,
+      roughnessMap: this.stoneTex.roughnessMap,
+      bumpMap: this.stoneTex.bumpMap,
+      bumpScale: 0.025,
+      color: 0xffffff,
+      roughness: 0.88,
+      metalness: 0.1
+    });
+    const halFloor = new THREE.Mesh(new THREE.CircleGeometry(38, 64), this.halFloorMat);
     halFloor.rotation.x = -Math.PI / 2;
     hal.add(halFloor);
 
@@ -295,12 +311,12 @@ export class WorldManager {
     water.add(waterPlane);
 
     // Zachte verre heuvelsilhouetten langs de horizon
-    const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x0b0f14, roughness: 1.0 });
+    this.waterHillMat = new THREE.MeshStandardMaterial({ color: 0x2b3c35, roughness: 0.98 });
     for (let i = 0; i < 18; i++) {
       const a = (i / 18) * Math.PI * 2;
       const dist = 26 + (i % 3) * 6;
       const h = 2.4 + (i % 4) * 1.5;
-      const hill = new THREE.Mesh(new THREE.SphereGeometry(6.5 + (i % 3) * 3, 12, 8), ridgeMat);
+      const hill = new THREE.Mesh(new THREE.SphereGeometry(6.5 + (i % 3) * 3, 14, 10), this.waterHillMat);
       hill.scale.set(1.6, h / 6.5, 1.0);
       hill.position.set(Math.cos(a) * dist, -0.4, Math.sin(a) * dist);
       hill.rotation.y = -a;
@@ -309,60 +325,60 @@ export class WorldManager {
     this.envs.water = water;
     this.envRoot.add(water);
 
-    // 3. Mistbos (textuur-bosgrond + slanke gelaagde donkere ceder-silhouetten)
+    // 3. Bos / Tuin (fris groen weidelandschap overdag, mistig nachtbos bij donker)
     const bos = new THREE.Group();
-    const bosFloor = new THREE.Mesh(
-      new THREE.CircleGeometry(38, 48),
-      new THREE.MeshStandardMaterial({
-        map: this.stoneTex.map,
-        bumpMap: this.stoneTex.bumpMap,
-        bumpScale: 0.03,
-        color: 0x26322b,
-        roughness: 0.94
-      })
-    );
+    this.bosFloorMat = new THREE.MeshStandardMaterial({
+      map: this.stoneTex.map,
+      bumpMap: this.stoneTex.bumpMap,
+      bumpScale: 0.025,
+      color: 0x5c8a56,
+      roughness: 0.94
+    });
+    const bosFloor = new THREE.Mesh(new THREE.CircleGeometry(42, 48), this.bosFloorMat);
     bosFloor.rotation.x = -Math.PI / 2;
     bos.add(bosFloor);
 
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1b1512, roughness: 0.95 });
-    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x101c17, roughness: 0.92 });
-    for (let i = 0; i < 42; i++) {
-      const a = (i / 42) * Math.PI * 2 + ((i * 11) % 7) * 0.05;
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x423023, roughness: 0.95 });
+    this.bosCanopyMat = new THREE.MeshStandardMaterial({ color: 0x3f6e49, roughness: 0.88 });
+    this.bosBlossomMat = new THREE.MeshStandardMaterial({ color: 0xd99aa8, roughness: 0.85 });
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2 + ((i * 11) % 7) * 0.05;
       const band = i % 3;
-      const dist = 5.4 + band * 3.8 + (i % 5) * 0.65;
-      const hScale = 0.85 + ((i * 7) % 6) * 0.22;
+      const dist = 5.8 + band * 4.0 + (i % 5) * 0.7;
+      const hScale = 0.82 + ((i * 7) % 6) * 0.18;
       const tree = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.14, 4.8, 7), trunkMat);
-      trunk.position.y = 2.4;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.15, 2.8, 7), trunkMat);
+      trunk.position.y = 1.4;
       tree.add(trunk);
-      // 4 slanke, verfijnde taklagen (geen dikke strip-kegels)
-      for (let tier = 0; tier < 4; tier++) {
-        const radius = 0.95 - tier * 0.18;
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(radius, 1.75, 9), canopyMat);
-        cone.position.y = 2.1 + tier * 1.15;
-        cone.rotation.y = tier * 0.7;
-        tree.add(cone);
-      }
+      // Zachte organische boomkronen (geen scherpe piramide-kegels)
+      const isBlossom = i % 5 === 0;
+      const cMat = isBlossom ? this.bosBlossomMat : this.bosCanopyMat;
+      const c1 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15, 1), cMat);
+      c1.position.set(0, 3.0, 0);
+      c1.scale.set(1.1, 0.88, 1.0);
+      const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85, 1), cMat);
+      c2.position.set(0.55, 2.55, 0.35);
+      const c3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.78, 1), cMat);
+      c3.position.set(-0.5, 2.65, -0.3);
+      tree.add(c1, c2, c3);
       tree.position.set(Math.cos(a) * dist, 0, Math.sin(a) * dist);
-      tree.scale.set(0.85 + (i % 3) * 0.15, hScale, 0.85 + (i % 3) * 0.15);
+      tree.scale.setScalar(hScale);
       bos.add(tree);
     }
     this.envs.bos = bos;
     this.envRoot.add(bos);
 
-    // 4. Schuilplek (architectonisch linnen tent-paviljoen op slanke ijzeren palen — knipoog naar zintuigen-vr)
+    // 4. Paviljoen / Schuilplek (licht linnen terras met zachte glooiende heuvels rondom)
     const schuil = new THREE.Group();
-    const sGround = new THREE.Mesh(
-      new THREE.CircleGeometry(38, 48),
-      new THREE.MeshStandardMaterial({
-        map: this.stoneTex.map,
-        roughnessMap: this.stoneTex.roughnessMap,
-        bumpMap: this.stoneTex.bumpMap,
-        bumpScale: 0.025,
-        color: 0x3b4148,
-        roughness: 0.85
-      })
-    );
+    this.schuilGroundMat = new THREE.MeshStandardMaterial({
+      map: this.stoneTex.map,
+      roughnessMap: this.stoneTex.roughnessMap,
+      bumpMap: this.stoneTex.bumpMap,
+      bumpScale: 0.025,
+      color: 0x627a58,
+      roughness: 0.88
+    });
+    const sGround = new THREE.Mesh(new THREE.CircleGeometry(42, 48), this.schuilGroundMat);
     sGround.rotation.x = -Math.PI / 2;
     sGround.position.y = -0.02;
     schuil.add(sGround);
@@ -373,24 +389,26 @@ export class WorldManager {
 
     this.tentMat = new THREE.MeshStandardMaterial({
       map: this.linenTex,
-      color: 0xdcc4a4,
+      color: 0xefe0c8,
       emissive: 0xa86c3a,
-      emissiveIntensity: 0.11,
+      emissiveIntensity: 0.1,
       roughness: 0.94,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.92
     });
 
-    // Zachte verre boom- en heuvelsilhouetten rondom de schuilplek voor diepte aan de horizon
-    const farSilMat = new THREE.MeshStandardMaterial({ color: 0x0d1115, roughness: 0.98 });
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2 + 0.15;
-      const dist = 14 + (i % 3) * 4.5;
-      const h = 3.5 + (i % 4) * 1.4;
-      const tree = new THREE.Mesh(new THREE.ConeGeometry(1.1 + (i % 3) * 0.45, h, 8), farSilMat);
-      tree.position.set(Math.cos(a) * dist, h * 0.45, Math.sin(a) * dist);
-      schuil.add(tree);
+    // Zachte glooiende heuvelrug in de verte (vervangt de scherpe driehoek-kegels)
+    this.schuilHillMat = new THREE.MeshStandardMaterial({ color: 0x3b5241, roughness: 0.98 });
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + 0.18;
+      const dist = 22 + (i % 3) * 6;
+      const h = 2.6 + (i % 4) * 1.4;
+      const hill = new THREE.Mesh(new THREE.SphereGeometry(7.2 + (i % 3) * 2.5, 16, 10), this.schuilHillMat);
+      hill.scale.set(1.75, h / 7.2, 1.0);
+      hill.position.set(Math.cos(a) * dist, -0.5, Math.sin(a) * dist);
+      hill.rotation.y = -a;
+      schuil.add(hill);
     }
 
     const halfW = 1.48;
@@ -612,6 +630,9 @@ export class WorldManager {
     this.target.fogColor.set(pal.fog);
     this.target.lightColor.set(pal.light);
     this.target.accentColor.set(pal.accent);
+    this.target.groundTint.set(pal.groundTint || '#3b3530');
+    this.target.sunColor.set(pal.sunColor || '#fff3c4');
+    this.target.daylight = pal.isBright ? Math.min(1, cue.brightness * 1.15) : Math.max(0, (cue.brightness - 0.72) * 1.4);
     this.target.brightness = cue.brightness;
     this.target.fog = cue.fog;
     this.target.pulse = cue.pulse;
@@ -628,6 +649,9 @@ export class WorldManager {
       this.currentParticleType = cue.particles;
       this.rainMesh.visible = cue.particles === 'regen';
       this.particles.visible = cue.particles !== 'uit' && cue.particles !== 'regen';
+      // Bij bloesem gebruiken we NormalBlending zodat pastelblaadjes ook tegen een heldere zomerlucht stralen!
+      this.particles.material.blending = cue.particles === 'bloesem' ? THREE.NormalBlending : THREE.AdditiveBlending;
+      this.particles.material.needsUpdate = true;
 
       if (cue.particles === 'sterren') {
         for (let i = 0; i < this.particleCount; i++) {
@@ -655,68 +679,100 @@ export class WorldManager {
     this.live.fogColor.lerp(this.target.fogColor, k);
     this.live.lightColor.lerp(this.target.lightColor, k);
     this.live.accentColor.lerp(this.target.accentColor, k);
+    this.live.groundTint.lerp(this.target.groundTint, k);
+    this.live.sunColor.lerp(this.target.sunColor, k);
+    this.live.daylight += (this.target.daylight - this.live.daylight) * k;
     this.live.brightness += (this.target.brightness - this.live.brightness) * k;
     this.live.fog += (this.target.fog - this.live.fog) * k;
     this.live.pulse += (this.target.pulse - this.live.pulse) * k;
 
     const breathWave = Math.sin(t * (0.8 + this.live.pulse * 1.3));
-    const breathMod = 1 + breathWave * this.live.pulse * 0.2;
+    const breathMod = 1 + breathWave * this.live.pulse * 0.18;
 
     if (!this.isAR) {
       this.skyUniforms.uTop.value.copy(this.live.skyTop);
       this.skyUniforms.uMid.value.copy(this.live.skyMid);
+      this.skyUniforms.uSunColor.value.copy(this.live.sunColor);
+      this.skyUniforms.uDaylight.value = this.live.daylight;
       this.skyUniforms.uTime.value = t;
-      this.skyUniforms.uBrightness.value = Math.max(0.06, this.live.brightness * breathMod);
+      this.skyUniforms.uBrightness.value = Math.max(0.08, this.live.brightness * breathMod);
 
       this.veilUniforms.uTime.value = t;
-      this.veilUniforms.uColor.value.copy(this.live.skyMid).lerp(this.live.accentColor, 0.25);
-      this.veilUniforms.uOpacity.value = 0.08 + this.live.fog * 0.34;
+      this.veilUniforms.uColor.value.copy(this.live.skyMid).lerp(this.live.lightColor, 0.35);
+      this.veilUniforms.uOpacity.value = 0.06 + this.live.fog * 0.3;
 
       if (!this.scene.fog) {
-        this.scene.fog = new THREE.FogExp2(this.live.fogColor.getHex(), 0.025);
+        this.scene.fog = new THREE.FogExp2(this.live.fogColor.getHex(), 0.02);
       }
-      this.scene.fog.color.copy(this.live.fogColor).multiplyScalar(0.32 + this.live.brightness * 0.85);
-      this.scene.fog.density = 0.008 + this.live.fog * 0.095;
+      this.scene.fog.color.copy(this.live.fogColor).multiplyScalar(0.35 + this.live.brightness * 0.72);
+      this.scene.fog.density = 0.006 + this.live.fog * 0.088;
     }
 
+    // Daglicht = warme lichte onderkant + krachtige zon; nacht = intiem en donker
     this.hemiLight.color.copy(this.live.lightColor);
-    this.hemiLight.intensity = (0.25 + this.live.brightness * 0.95) * breathMod;
-    this.keyLight.color.copy(this.live.lightColor);
-    this.keyLight.intensity = (0.28 + this.live.brightness * 1.35) * breathMod;
+    this.hemiLight.groundColor.copy(this.live.groundTint).multiplyScalar(0.45 + this.live.daylight * 0.55);
+    this.hemiLight.intensity = (0.3 + this.live.brightness * (0.95 + this.live.daylight * 0.55)) * breathMod;
+    this.keyLight.color.copy(this.live.sunColor);
+    this.keyLight.intensity = (0.3 + this.live.brightness * (1.3 + this.live.daylight * 0.85)) * breathMod;
     this.rimLight.color.copy(this.live.accentColor);
-    this.rimLight.intensity = (0.35 + this.live.brightness * 1.1) * breathMod;
+    this.rimLight.intensity = (0.35 + this.live.brightness * 1.0) * breathMod;
 
-    // Omgevingsdetails bijwerken
-    if (this.currentEnvId === 'hal' && !this.isAR) {
-      for (const ring of this.halRings) {
-        ring.material.color.copy(this.live.accentColor);
+    // Omgevingsmaterialen meebewegen tussen dag (vrolijk/helder) en nacht (donker/sfeervol)
+    if (!this.isAR) {
+      const dl = this.live.daylight;
+      if (this.currentEnvId === 'hal') {
+        this.halFloorMat.color.set('#555b63').lerp(new THREE.Color('#e6dfd3'), dl);
+        for (const ring of this.halRings) ring.material.color.copy(this.live.accentColor);
+      }
+      if (this.currentEnvId === 'water') {
+        this.waterUniforms.uTime.value = t;
+        this.waterUniforms.uDeep.value.copy(this.live.skyTop).multiplyScalar(0.65 + dl * 0.35);
+        this.waterUniforms.uReflect.value.copy(this.live.skyMid).lerp(this.live.sunColor, 0.35);
+        this.waterUniforms.uFogColor.value.copy(this.scene.fog.color);
+        this.waterUniforms.uFogDensity.value = this.scene.fog.density;
+        this.waterHillMat.color.set('#0e141a').lerp(this.live.groundTint, 0.25 + dl * 0.65);
+      }
+      if (this.currentEnvId === 'bos') {
+        this.bosFloorMat.color.set('#223026').lerp(this.live.groundTint, 0.35 + dl * 0.65);
+        this.bosCanopyMat.color.set('#14241b').lerp(new THREE.Color('#4f8f57'), dl * 0.9);
+        this.bosBlossomMat.color.set('#33252d').lerp(new THREE.Color('#f7b5c6'), dl * 0.95);
+      }
+      if (this.currentEnvId === 'schuilplek') {
+        this.schuilGroundMat.color.set('#282e34').lerp(this.live.groundTint, 0.35 + dl * 0.65);
+        this.schuilHillMat.color.set('#11161c').lerp(this.live.groundTint, 0.25 + dl * 0.62);
+        this.tentMat.emissive.copy(this.live.accentColor);
+        this.tentMat.emissiveIntensity = 0.08 + this.live.brightness * 0.16;
       }
     }
-    if (this.currentEnvId === 'water' && !this.isAR) {
-      this.waterUniforms.uTime.value = t;
-      this.waterUniforms.uDeep.value.copy(this.live.skyTop).multiplyScalar(0.7);
-      this.waterUniforms.uReflect.value.copy(this.live.skyMid).lerp(this.live.lightColor, 0.35);
-      this.waterUniforms.uFogColor.value.copy(this.scene.fog.color);
-      this.waterUniforms.uFogDensity.value = this.scene.fog.density;
-    }
-    if (this.currentEnvId === 'schuilplek' && !this.isAR) {
-      this.tentMat.emissive.copy(this.live.accentColor);
-      this.tentMat.emissiveIntensity = 0.1 + this.live.brightness * 0.2;
-    }
 
-    // Regen shader
     if (this.rainMesh.visible) {
       this.rainUniforms.uTime.value = t;
       this.rainUniforms.uShelter.value = (!this.isAR && this.currentEnvId === 'schuilplek') ? 1.0 : 0.0;
     }
 
-    // Shader deeltjes
     const pType = this.currentParticleType;
     if (this.particles.visible && pType) {
       this.pUniforms.uTime.value = t;
       const pos = this.particles.geometry.attributes.position;
 
-      if (pType === 'vuurvliegjes') {
+      if (pType === 'bloesem') {
+        // Zachte vrolijke ronddwarrelende lentebloesem / lichtblaadjes
+        this.pUniforms.uColor.value.set('#ffb3c6').lerp(this.live.accentColor, 0.35);
+        this.pUniforms.uOpacity.value = 0.92;
+        this.pUniforms.uTwinkle.value = 0.35;
+        this.pUniforms.uSizeScale.value = 1.25;
+        for (let i = 0; i < this.particleCount; i++) {
+          const s = this.pSeeds[i * 2];
+          const sp = this.pSeeds[i * 2 + 1];
+          this.pPositions[i * 3] += (0.28 + Math.sin(t * 0.9 * sp + s) * 0.26) * dt;
+          this.pPositions[i * 3 + 1] -= (0.22 + sp * 0.16) * dt;
+          this.pPositions[i * 3 + 2] += Math.cos(t * 0.75 * sp + s) * 0.22 * dt;
+          if (this.pPositions[i * 3 + 1] < 0.08 || this.pPositions[i * 3] > 11) {
+            this._resetParticle(i, false);
+          }
+        }
+        pos.needsUpdate = true;
+      } else if (pType === 'vuurvliegjes') {
         this.pUniforms.uColor.value.copy(this.live.accentColor).lerp(new THREE.Color('#ffd88a'), 0.5);
         this.pUniforms.uOpacity.value = 0.95;
         this.pUniforms.uTwinkle.value = 1.0;
@@ -733,7 +789,7 @@ export class WorldManager {
         pos.needsUpdate = true;
       } else if (pType === 'sneeuw') {
         this.pUniforms.uColor.value.set('#e8f2fc');
-        this.pUniforms.uOpacity.value = 0.78;
+        this.pUniforms.uOpacity.value = 0.82;
         this.pUniforms.uTwinkle.value = 0.2;
         this.pUniforms.uSizeScale.value = 0.85;
         for (let i = 0; i < this.particleCount; i++) {
@@ -741,17 +797,6 @@ export class WorldManager {
           this.pPositions[i * 3] += Math.sin(t * 0.65 + s) * dt * 0.18;
           this.pPositions[i * 3 + 1] -= dt * (0.35 + this.pSeeds[i * 2 + 1] * 0.28);
           if (this.pPositions[i * 3 + 1] < 0.05) this._resetParticle(i, false);
-        }
-        pos.needsUpdate = true;
-      } else if (pType === 'stof') {
-        this.pUniforms.uColor.value.copy(this.live.lightColor);
-        this.pUniforms.uOpacity.value = 0.52;
-        this.pUniforms.uTwinkle.value = 0.55;
-        this.pUniforms.uSizeScale.value = 0.68;
-        for (let i = 0; i < this.particleCount; i++) {
-          const s = this.pSeeds[i * 2];
-          this.pPositions[i * 3] += Math.sin(t * 0.22 + s) * dt * 0.06;
-          this.pPositions[i * 3 + 1] += Math.cos(t * 0.28 + s) * dt * 0.04;
         }
         pos.needsUpdate = true;
       } else if (pType === 'sterren') {

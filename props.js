@@ -190,28 +190,36 @@ function createPropMesh(type, colorHex) {
     group.userData.pointLight = light;
     group.userData.isFire = true;
   } else if (type === 'boom') {
-    // Sculpturale groep van 3 slanke donkere bomen met subtiele windbeweging
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1d1714, roughness: 0.95 });
+    // Organische bloeiende boom / bloesem (kleurt direct mee: roze bloesem, zomer-goud, lentegroen of nacht)
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x463325, roughness: 0.92 });
     const leafMat = new THREE.MeshStandardMaterial({
-      color: accent.clone().multiplyScalar(0.28).add(new THREE.Color('#0c1512')),
-      roughness: 0.88
+      color: accent.clone().lerp(new THREE.Color('#ffffff'), 0.12),
+      emissive: accent.clone(),
+      emissiveIntensity: 0.08,
+      roughness: 0.84
     });
     const specs = [
       { x: 0, z: 0, s: 1.05 },
-      { x: -0.62, z: 0.34, s: 0.78 },
-      { x: 0.56, z: -0.28, s: 0.68 }
+      { x: -0.68, z: 0.36, s: 0.72 }
     ];
     const trees = [];
     for (const sp of specs) {
       const tGrp = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.1, 3.2, 7), trunkMat);
-      trunk.position.y = 1.6;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.13, 2.2, 8), trunkMat);
+      trunk.position.y = 1.1;
       tGrp.add(trunk);
-      for (let tier = 0; tier < 4; tier++) {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.72 - tier * 0.14, 1.35, 10), leafMat);
-        cone.position.y = 1.4 + tier * 0.82;
-        cone.rotation.y = tier * 0.8;
-        tGrp.add(cone);
+
+      const crowns = [
+        [0, 2.45, 0, 0.92],
+        [0.52, 2.15, 0.28, 0.65],
+        [-0.48, 2.22, -0.22, 0.62],
+        [0.1, 2.95, -0.18, 0.56]
+      ];
+      for (const [cx, cy, cz, cr] of crowns) {
+        const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(cr, 1), leafMat);
+        puff.position.set(cx, cy, cz);
+        puff.scale.set(1.12, 0.86, 1.05);
+        tGrp.add(puff);
       }
       tGrp.position.set(sp.x, 0, sp.z);
       tGrp.scale.setScalar(sp.s);
@@ -447,7 +455,8 @@ export class PropsManager {
         entry.group.userData.pointLight.color.copy(col);
       }
       if (entry.group.userData.leafMat) {
-        entry.group.userData.leafMat.color.copy(col).multiplyScalar(0.28).add(new THREE.Color('#0c1512'));
+        entry.group.userData.leafMat.color.copy(col).lerp(new THREE.Color('#ffffff'), 0.12);
+        entry.group.userData.leafMat.emissive.copy(col);
       }
     }
     for (const [id, entry] of [...this.propEntries.entries()]) {

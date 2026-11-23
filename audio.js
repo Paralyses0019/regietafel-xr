@@ -1,4 +1,4 @@
-// 100% procedurele Web Audio engine met 6 sfeerlagen + 3D HRTF-geluidsbronnen
+// 100% procedurele Web Audio engine v3 — vrolijke vogels, zonnig majeur-akkoord, windgong + natuur & spanning
 import * as THREE from 'three';
 import { SOUND_TYPES } from './state.js';
 
@@ -7,11 +7,11 @@ export class AudioEngine {
     this.ctx = null;
     this.master = null;
     this.noiseBuffer = null;
-    this.layers = {};
     this.layerGains = {};
-    this.activeSources = new Map(); // id -> { data, nextTrigger }
+    this.activeSources = new Map();
     this.heartbeatTimer = 0;
     this.crackleTimer = 0;
+    this.birdTimer = 0;
     this.running = false;
     this.muted = false;
     this._forward = new THREE.Vector3();
@@ -80,7 +80,73 @@ export class AudioEngine {
   _buildAmbienceLayers() {
     const ctx = this.ctx;
 
-    // 1. Regen: zachte breedband regen + hogere druppel-siss
+    // 1. Vogels / Zomer: lichte zomerse bries-bed + vrolijke vogeltsjilpjes in update()
+    {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const src = this._makeLoopNoise();
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1100;
+      bp.Q.value = 0.9;
+      const breezeGain = ctx.createGain();
+      breezeGain.gain.value = 0.14;
+      src.connect(bp);
+      bp.connect(breezeGain);
+      breezeGain.connect(gain);
+      gain.connect(this.master);
+      this.layerGains.vogels = gain;
+    }
+
+    // 2. Zonnig akkoord: warme, optimistische Cmaj9-pad met zachte zweving
+    {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 920;
+
+      // C4, E4, G4, B4, D5 (licht, optimistisch, open majeur-9)
+      const freqs = [261.63, 329.63, 392.0, 493.88, 587.33];
+      freqs.forEach((f, idx) => {
+        const osc = ctx.createOscillator();
+        osc.type = idx < 2 ? 'sine' : 'triangle';
+        osc.frequency.value = f + (idx % 2 === 0 ? 0.35 : -0.35);
+        const g = ctx.createGain();
+        g.gain.value = idx < 3 ? 0.075 : 0.038;
+        osc.connect(g);
+        g.connect(lp);
+        osc.start();
+      });
+
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.18;
+      const lfoG = ctx.createGain();
+      lfoG.gain.value = 260;
+      lfo.connect(lfoG);
+      lfoG.connect(lp.frequency);
+      lfo.start();
+
+      lp.connect(gain);
+      gain.connect(this.master);
+      this.layerGains.akkoord = gain;
+    }
+
+    // 3. Kampvuur
+    {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const src = this._makeLoopNoise();
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 220;
+      src.connect(lp);
+      lp.connect(gain);
+      gain.connect(this.master);
+      this.layerGains.vuur = gain;
+    }
+
+    // 4. Regen
     {
       const gain = ctx.createGain();
       gain.gain.value = 0;
@@ -98,23 +164,22 @@ export class AudioEngine {
       this.layerGains.regen = gain;
     }
 
-    // 2. Wind: langzaam golvende bandpass-ruis
+    // 5. Bries / wind
     {
       const gain = ctx.createGain();
       gain.gain.value = 0;
       const src = this._makeLoopNoise();
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.value = 310;
-      bp.Q.value = 2.6;
+      bp.frequency.value = 340;
+      bp.Q.value = 2.4;
 
       const lfo = ctx.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.value = 0.11;
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 140;
-      lfo.connect(lfoGain);
-      lfoGain.connect(bp.frequency);
+      lfo.frequency.value = 0.12;
+      const lfoG = ctx.createGain();
+      lfoG.gain.value = 140;
+      lfo.connect(lfoG);
+      lfoG.connect(bp.frequency);
       lfo.start();
 
       src.connect(bp);
@@ -123,45 +188,7 @@ export class AudioEngine {
       this.layerGains.wind = gain;
     }
 
-    // 3. Kampvuur: warme lage gloed + procedurele knisper-tikjes in update()
-    {
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-      const src = this._makeLoopNoise();
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 220;
-      src.connect(lp);
-      lp.connect(gain);
-      gain.connect(this.master);
-      this.layerGains.vuur = gain;
-    }
-
-    // 4. Warme drone: rustige kwint-klank (C3 + G3 + C4)
-    {
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 480;
-
-      [130.81, 196.0, 261.63, 131.4].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
-        osc.frequency.value = freq;
-        const g = ctx.createGain();
-        g.gain.value = idx === 2 ? 0.06 : 0.11;
-        osc.connect(g);
-        g.connect(lp);
-        osc.start();
-      });
-
-      lp.connect(gain);
-      gain.connect(this.master);
-      this.layerGains.drone = gain;
-    }
-
-    // 5. Spanning: donkere zwevende sub-drone met lichte wrijving
+    // 6. Spanning + zachte hartslag
     {
       const gain = ctx.createGain();
       gain.gain.value = 0;
@@ -174,7 +201,7 @@ export class AudioEngine {
         osc.type = idx === 2 ? 'sawtooth' : 'sine';
         osc.frequency.value = freq;
         const g = ctx.createGain();
-        g.gain.value = idx === 2 ? 0.035 : 0.16;
+        g.gain.value = idx === 2 ? 0.032 : 0.15;
         osc.connect(g);
         g.connect(lp);
         osc.start();
@@ -184,14 +211,6 @@ export class AudioEngine {
       gain.connect(this.master);
       this.layerGains.spanning = gain;
     }
-
-    // 6. Hartslag: gain-bus voor de ritmische lub-dub
-    {
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-      gain.connect(this.master);
-      this.layerGains.hartslag = gain;
-    }
   }
 
   setAmbience(ambience, fadeSeconds = 0.25) {
@@ -199,12 +218,12 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     const ramp = Math.max(0.08, fadeSeconds);
     const scales = {
-      regen: 0.45,
-      wind: 0.55,
+      vogels: 0.7,
+      akkoord: 0.55,
       vuur: 0.65,
-      drone: 0.45,
-      spanning: 0.5,
-      hartslag: 0.85
+      regen: 0.45,
+      wind: 0.52,
+      spanning: 0.52
     };
     for (const [key, gainNode] of Object.entries(this.layerGains)) {
       const val = Math.max(0, Math.min(1, ambience?.[key] ?? 0));
@@ -235,22 +254,18 @@ export class AudioEngine {
         const meta = SOUND_TYPES.find(t => t.id === s.type) || SOUND_TYPES[0];
         this.activeSources.set(s.id, {
           data: s,
-          nextTrigger: now + 0.6 + Math.random() * Math.min(2.0, meta.interval * 0.5),
-          pulseAt: 0
+          nextTrigger: now + 0.6 + Math.random() * Math.min(2.0, meta.interval * 0.5)
         });
       }
     }
     for (const id of [...this.activeSources.keys()]) {
-      if (!incoming.has(id)) {
-        this.activeSources.delete(id);
-      }
+      if (!incoming.has(id)) this.activeSources.delete(id);
     }
   }
 
   update(dt, headPos, headQuat, onSoundPulse = null) {
     if (!this.ctx || this.ctx.state !== 'running') return;
 
-    // 1. Update 3D AudioListener pose
     const listener = this.ctx.listener;
     this._forward.set(0, 0, -1).applyQuaternion(headQuat);
     this._up.set(0, 1, 0).applyQuaternion(headQuat);
@@ -266,15 +281,25 @@ export class AudioEngine {
       listener.upX.setValueAtTime(this._up.x, t);
       listener.upY.setValueAtTime(this._up.y, t);
       listener.upZ.setValueAtTime(this._up.z, t);
-    } else if (listener.setPosition) {
-      listener.setPosition(headPos.x, headPos.y, headPos.z);
-      listener.setOrientation(
-        this._forward.x, this._forward.y, this._forward.z,
-        this._up.x, this._up.y, this._up.z
-      );
     }
 
     if (this.muted) return;
+
+    // 1. Zomerse zangvogels (ambient rondom je heen)
+    const birdVol = this._currentAmbience?.vogels || 0;
+    if (birdVol > 0.04) {
+      this.birdTimer -= dt;
+      if (this.birdTimer <= 0) {
+        this.birdTimer = 0.75 + Math.random() * (2.6 - birdVol * 1.1);
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 3.0 + Math.random() * 4.5;
+        this.triggerSpatial('vogel', {
+          x: headPos.x + Math.cos(angle) * dist,
+          y: headPos.y + 1.2 + Math.random() * 2.0,
+          z: headPos.z + Math.sin(angle) * dist
+        }, birdVol * 0.75);
+      }
+    }
 
     // 2. Kampvuur-knispers
     const vuurVol = this._currentAmbience?.vuur || 0;
@@ -286,13 +311,13 @@ export class AudioEngine {
       }
     }
 
-    // 3. Hartslag (lub-dub)
-    const heartVol = this._currentAmbience?.hartslag || 0;
-    if (heartVol > 0.04) {
+    // 3. Zachte hartslag gekoppeld aan Spanning > 0.35
+    const spanVol = this._currentAmbience?.spanning || 0;
+    if (spanVol > 0.35) {
       this.heartbeatTimer -= dt;
       if (this.heartbeatTimer <= 0) {
-        this.heartbeatTimer = 0.92;
-        this._playHeartbeat(heartVol);
+        this.heartbeatTimer = 0.94;
+        this._playHeartbeat((spanVol - 0.3) * 1.1);
       }
     }
 
@@ -321,7 +346,7 @@ export class AudioEngine {
     const amp = (0.04 + Math.random() * 0.14) * vol;
     env.gain.setValueAtTime(0.0001, now);
     env.gain.exponentialRampToValueAtTime(amp, now + 0.004);
-    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.028 + Math.random() * 0.03);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
     src.connect(bp);
     bp.connect(env);
     env.connect(this.master);
@@ -341,28 +366,26 @@ export class AudioEngine {
       env.gain.linearRampToValueAtTime(amp * vol, now + offset + 0.025);
       env.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.22);
       osc.connect(env);
-      env.connect(this.layerGains.hartslag);
+      env.connect(this.master);
       osc.start(now + offset);
       osc.stop(now + offset + 0.24);
     };
-    thump(0, 74, 0.72);
-    thump(0.22, 62, 0.45);
+    thump(0, 72, 0.42);
+    thump(0.22, 60, 0.26);
   }
 
   _createPanner(pos) {
     const panner = this.ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
-    panner.refDistance = 1.2;
-    panner.maxDistance = 24;
-    panner.rolloffFactor = 1.15;
+    panner.refDistance = 1.4;
+    panner.maxDistance = 26;
+    panner.rolloffFactor = 1.05;
     if (panner.positionX) {
       const t = this.ctx.currentTime;
       panner.positionX.setValueAtTime(pos.x, t);
       panner.positionY.setValueAtTime(pos.y, t);
       panner.positionZ.setValueAtTime(pos.z, t);
-    } else {
-      panner.setPosition(pos.x, pos.y, pos.z);
     }
     panner.connect(this.master);
     return panner;
@@ -375,7 +398,44 @@ export class AudioEngine {
     const panner = this._createPanner(pos);
     const v = Math.max(0.05, Math.min(1, volume));
 
-    if (type === 'voetstap') {
+    if (type === 'vogel') {
+      // Vrolijk melodieus merel/mees-motief (2-3 snelle fluitnootjes)
+      const base = 1650 + Math.random() * 950;
+      const notes = Math.random() > 0.45 ? [0, 0.11, 0.24] : [0, 0.13];
+      notes.forEach((off, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        const f0 = base * (i === 1 ? 1.25 : i === 2 ? 1.12 : 1.0);
+        osc.frequency.setValueAtTime(f0, now + off);
+        osc.frequency.exponentialRampToValueAtTime(f0 * (i % 2 === 0 ? 1.28 : 0.86), now + off + 0.085);
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0.0001, now + off);
+        env.gain.linearRampToValueAtTime(0.14 * v, now + off + 0.018);
+        env.gain.exponentialRampToValueAtTime(0.0001, now + off + 0.11);
+        osc.connect(env);
+        env.connect(panner);
+        osc.start(now + off);
+        osc.stop(now + off + 0.13);
+      });
+    } else if (type === 'klankschaal') {
+      // Heldere vrolijke pentatonische windgong (2-3 glinsterende klokjes)
+      const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+      const pick = [0, 1, 2].map(() => scale[Math.floor(Math.random() * scale.length)]);
+      pick.forEach((f, idx) => {
+        const off = idx * 0.14;
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0.0001, now + off);
+        env.gain.linearRampToValueAtTime(0.15 * v, now + off + 0.015);
+        env.gain.exponentialRampToValueAtTime(0.0001, now + off + 2.4);
+        osc.connect(env);
+        env.connect(panner);
+        osc.start(now + off);
+        osc.stop(now + off + 2.5);
+      });
+    } else if (type === 'voetstap') {
       [0, 0.48].forEach((offset, i) => {
         const src = ctx.createBufferSource();
         src.buffer = this.noiseBuffer;
@@ -391,22 +451,6 @@ export class AudioEngine {
         bp.connect(env);
         env.connect(panner);
         src.start(now + offset, Math.random() * 2, 0.2);
-      });
-    } else if (type === 'klankschaal') {
-      const freqs = [293.66, 589.5, 882.2];
-      freqs.forEach((f, idx) => {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.value = f;
-        const env = ctx.createGain();
-        const peak = (idx === 0 ? 0.24 : idx === 1 ? 0.11 : 0.05) * v;
-        env.gain.setValueAtTime(0.0001, now);
-        env.gain.linearRampToValueAtTime(peak, now + 0.03);
-        env.gain.exponentialRampToValueAtTime(0.0001, now + (idx === 0 ? 3.8 : 2.2));
-        osc.connect(env);
-        env.connect(panner);
-        osc.start(now);
-        osc.stop(now + 4.0);
       });
     } else if (type === 'tak') {
       [0, 0.06].forEach((offset, idx) => {
@@ -425,28 +469,11 @@ export class AudioEngine {
         env.connect(panner);
         src.start(now + offset, Math.random() * 2.5, 0.12);
       });
-    } else if (type === 'windvlaag') {
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuffer;
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.Q.value = 3.2;
-      bp.frequency.setValueAtTime(220, now);
-      bp.frequency.exponentialRampToValueAtTime(640, now + 0.9);
-      bp.frequency.exponentialRampToValueAtTime(190, now + 2.3);
-      const env = ctx.createGain();
-      env.gain.setValueAtTime(0.0001, now);
-      env.gain.linearRampToValueAtTime(0.45 * v, now + 0.75);
-      env.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
-      src.connect(bp);
-      bp.connect(env);
-      env.connect(panner);
-      src.start(now, Math.random(), 2.5);
     }
 
     setTimeout(() => {
       try { panner.disconnect(); } catch {}
-    }, 4500);
+    }, 3500);
   }
 
   playUiClick(high = false) {
@@ -457,7 +484,7 @@ export class AudioEngine {
     osc.frequency.setValueAtTime(high ? 680 : 460, now);
     osc.frequency.exponentialRampToValueAtTime(high ? 920 : 320, now + 0.045);
     const env = this.ctx.createGain();
-    env.gain.setValueAtTime(0.06, now);
+    env.gain.setValueAtTime(0.05, now);
     env.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
     osc.connect(env);
     env.connect(this.master);
